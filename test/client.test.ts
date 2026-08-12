@@ -5,6 +5,11 @@
 // permutation Pitch Machine might return; those are the API's own tests.
 // If the API drifts, tools.test.ts catches it because it uses the real
 // derivation functions on live-shaped fixtures.
+//
+// Auth-mode note: v0.1.x defaults to `session-cookie` because the server
+// only reads the `pm_pitcher_sess` cookie. `bearer` mode is exercised too
+// because v0.2.0's /api/agent/token surface will flip the default and the
+// header shape needs to already be right.
 
 import { describe, expect, it } from "vitest";
 import { PitchMachineApiError, PitchMachineClient } from "../src/client.js";
@@ -36,14 +41,18 @@ function makeFakeFetch(response: {
 
 describe("PitchMachineClient", () => {
   describe("createReceiver", () => {
-    it("sends camelCase B2B payload and returns tolerant response", async () => {
+    it("POSTs to /api/receivers (not /api/v2/receivers) with camelCase B2B payload", async () => {
+      // The receivers endpoint is deliberately un-versioned — see
+      // server/routes.ts:968. Regressing to /api/v2/receivers 404s every
+      // first tool call.
       const { fetch: fakeFetch, calls } = makeFakeFetch({
         status: 201,
         body: { id: "rcv_123", audienceMode: "b2b", createdAt: "2026-08-11T12:00:00Z" },
       });
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
-        token: "tok_abc",
+        token: "cookie_value",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -56,7 +65,7 @@ describe("PitchMachineClient", () => {
 
       expect(result.id).toBe("rcv_123");
       expect(calls).toHaveLength(1);
-      expect(calls[0]?.url).toBe("https://api.example.com/api/v2/receivers");
+      expect(calls[0]?.url).toBe("https://api.example.com/api/receivers");
       const parsed = JSON.parse(String(calls[0]?.init.body ?? "{}"));
       expect(parsed).toMatchObject({
         audienceMode: "b2b",
@@ -64,8 +73,6 @@ describe("PitchMachineClient", () => {
         contactEmail: "person@acme.com",
         customNotes: "warm lead",
       });
-      const headers = calls[0]?.init.headers as Record<string, string>;
-      expect(headers.Authorization).toBe("Bearer tok_abc");
     });
 
     it("sends B2C fields when audience_mode is b2c", async () => {
@@ -75,7 +82,8 @@ describe("PitchMachineClient", () => {
       });
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
-        token: "tok_abc",
+        token: "cookie_value",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -97,6 +105,62 @@ describe("PitchMachineClient", () => {
     });
   });
 
+  describe("auth headers", () => {
+    it("session-cookie mode sends a Cookie header with pm_pitcher_sess", async () => {
+      // This is the header the server actually reads. It matches
+      // server/lib/pitcher-session.ts:readSessionToken byte-for-byte.
+      const { fetch: fakeFetch, calls } = makeFakeFetch({ status: 200, body: [] });
+      const client = new PitchMachineClient({
+        baseUrl: "https://api.example.com",
+        token: "v2.abc.123.jti.hmac",
+        authMode: "session-cookie",
+        fetchImpl: fakeFetch,
+      });
+
+      await client.listPitches();
+
+      const headers = calls[0]?.init.headers as Record<string, string>;
+      expect(headers.Cookie).toBe("pm_pitcher_sess=v2.abc.123.jti.hmac");
+      // Belt-and-braces: no Authorization header in session-cookie mode.
+      expect(headers.Authorization).toBeUndefined();
+    });
+
+    it("URL-encodes cookie values so `+` and `=` survive the wire", async () => {
+      const { fetch: fakeFetch, calls } = makeFakeFetch({ status: 200, body: [] });
+      const client = new PitchMachineClient({
+        baseUrl: "https://api.example.com",
+        token: "v2.abc.123.jti+with/slashes=pad",
+        authMode: "session-cookie",
+        fetchImpl: fakeFetch,
+      });
+
+      await client.listPitches();
+
+      const headers = calls[0]?.init.headers as Record<string, string>;
+      // The server's parseCookies calls decodeURIComponent, so we encode.
+      expect(headers.Cookie).toBe(
+        "pm_pitcher_sess=v2.abc.123.jti%2Bwith%2Fslashes%3Dpad",
+      );
+    });
+
+    it("bearer mode sends Authorization: Bearer and no Cookie", async () => {
+      // v0.2.0 will flip the default to this once /api/agent/token ships.
+      const { fetch: fakeFetch, calls } = makeFakeFetch({ status: 200, body: [] });
+      const client = new PitchMachineClient({
+        baseUrl: "https://api.example.com",
+        token: "pma_deadbeef",
+        authMode: "bearer",
+        fetchImpl: fakeFetch,
+      });
+
+      await client.listPitches();
+
+      const headers = calls[0]?.init.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer pma_deadbeef");
+      expect(headers.Cookie).toBeUndefined();
+    });
+  });
+
   describe("error handling", () => {
     it("throws PitchMachineApiError with API-supplied message on non-2xx", async () => {
       const { fetch: fakeFetch } = makeFakeFetch({
@@ -106,6 +170,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -124,6 +189,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -136,6 +202,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -158,6 +225,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -174,6 +242,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -187,6 +256,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
 
@@ -204,6 +274,7 @@ describe("PitchMachineClient", () => {
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com///",
         token: "t",
+        authMode: "session-cookie",
         fetchImpl: fakeFetch,
       });
       await client.listPitches();

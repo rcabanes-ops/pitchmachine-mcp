@@ -1,10 +1,16 @@
-// Thin, boring HTTP client around Pitch Machine's v2 API.
+// Thin, boring HTTP client around Pitch Machine's API.
 //
 // Everything the tools do goes through here. That means:
-//   - one place to swap in a real Bearer/API-token scheme when Pitch Machine
-//     ships one (today we forward a Supabase session JWT)
+//   - one place to swap in the real Bearer/API-token scheme once
+//     Pitch Machine ships /api/agent/token (v0.2.0)
 //   - one place to standardize on error shapes
 //   - one place to mock in tests (see test/client.test.ts)
+//
+// Auth today (v0.1.1): the client forwards a copied HttpOnly session cookie
+// (`pm_pitcher_sess`) — the same cookie the browser holds after sign-in.
+// This is honest but ugly: users copy the cookie value from DevTools. Once
+// v0.2.0 lands a proper agent-token surface, `authHeaders()` gains a second
+// branch and everything else stays the same.
 //
 // Deliberately no retries. The generate-pitch tool has its own polling loop
 // with a caller-controlled timeout; other tools are single-shot and the
@@ -18,9 +24,26 @@ import {
   type ReceiverApiResponse,
 } from "./types.js";
 
+/**
+ * Auth modes supported by the client.
+ *
+ * - `session-cookie`: forward the browser's `pm_pitcher_sess` cookie value.
+ *   The one that works against the current server. Ugly to acquire.
+ * - `bearer`: forward `Authorization: Bearer <token>`. Reserved for v0.2.0
+ *   when `/api/agent/token` ships. Currently unused in production.
+ */
+export type AuthMode = "session-cookie" | "bearer";
+
 export interface ClientConfig {
   baseUrl: string;
+  /**
+   * The credential value. Semantics depend on `authMode`:
+   *  - `session-cookie` → the cookie *value* (everything after `pm_pitcher_sess=`),
+   *    URL-decoded if the browser encoded it.
+   *  - `bearer` → the API token as issued by `/api/agent/token`.
+   */
   token: string;
+  authMode: AuthMode;
   requestTimeoutMs?: number;
   // Injected in tests. Node 20+ has global fetch.
   fetchImpl?: typeof fetch;
@@ -48,24 +71,10 @@ export class PitchMachineApiError extends Error {
   }
 }
 
-/**
- * Never throws. Returns `{ error }` for shape stability in tools that would
- * rather branch than catch. Reserved for the generate-pitch polling loop
- * where a single 404 during propagation isn't fatal.
- */
-export interface SafeResult<T> {
-  ok: true;
-  value: T;
-}
-export interface SafeError {
-  ok: false;
-  error: PitchMachineApiError;
-}
-export type Safe<T> = SafeResult<T> | SafeError;
-
 export class PitchMachineClient {
   private readonly baseUrl: string;
   private readonly token: string;
+  private readonly authMode: AuthMode;
   private readonly requestTimeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
@@ -73,6 +82,7 @@ export class PitchMachineClient {
     // Strip trailing slash so we can freely concatenate paths.
     this.baseUrl = config.baseUrl.replace(/\/+$/, "");
     this.token = config.token;
+    this.authMode = config.authMode;
     this.requestTimeoutMs = config.requestTimeoutMs ?? 30_000;
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
@@ -83,9 +93,12 @@ export class PitchMachineClient {
 
   async createReceiver(input: CreateReceiverInput): Promise<ReceiverApiResponse> {
     // We deliberately forward the exact camelCase field names Pitch Machine's
-    // /api/v2/receivers endpoint expects. The MCP-facing snake_case is
+    // /api/receivers endpoint expects. The MCP-facing snake_case is
     // translated here — one place, one map — so if the API renames a field
     // the fix is local.
+    //
+    // Note the path: the server exposes `/api/receivers`, not `/api/v2/…`.
+    // The pitches endpoints are v2, the receivers endpoint is not.
     const body: Record<string, unknown> = {
       audienceMode: input.audience_mode,
     };
@@ -105,7 +118,7 @@ export class PitchMachineClient {
     }
     if (input.custom_notes) body.customNotes = input.custom_notes;
 
-    const raw = await this.request("/api/v2/receivers", {
+    const raw = await this.request("/api/receivers", {
       method: "POST",
       body: JSON.stringify(body),
     });
@@ -172,6 +185,25 @@ export class PitchMachineClient {
   // Low-level request
   // ---------------------------------------------------------------------------
 
+  /**
+   * Compose the auth header for a request.
+   *
+   * Kept as its own method so v0.2.0's Bearer-token path lands as a one-line
+   * change (the `case "bearer"` branch is already here and unreachable today).
+   */
+  private authHeaders(): Record<string, string> {
+    switch (this.authMode) {
+      case "session-cookie":
+        // The server reads `pm_pitcher_sess` from req.headers.cookie and only
+        // from there — see server/lib/pitcher-session.ts:readSessionToken.
+        // We pass the value URL-encoded because the browser stores it that
+        // way and the server's parseCookies expects encoded values.
+        return { Cookie: `pm_pitcher_sess=${encodeURIComponent(this.token)}` };
+      case "bearer":
+        return { Authorization: `Bearer ${this.token}` };
+    }
+  }
+
   private async request(path: string, init: RequestInit): Promise<unknown> {
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
@@ -184,9 +216,7 @@ export class PitchMachineClient {
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
-          // Session JWT for v0. When Pitch Machine ships a real API-token
-          // surface, only this line needs to change.
-          Authorization: `Bearer ${this.token}`,
+          ...this.authHeaders(),
           ...(init.headers ?? {}),
         },
         signal: controller.signal,
