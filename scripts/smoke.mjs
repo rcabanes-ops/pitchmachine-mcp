@@ -135,11 +135,17 @@ async function receiverPathCheck() {
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const t0 = Date.now();
+  // Field names are the server's canonical `receiverFields` (see
+  // shared/schema.ts). Only company_name is required. Everything else
+  // here is present so a stray refactor in the client mapping shows up
+  // as a 400 with "unrecognized keys" instead of a green smoke.
   const receiver = await client.createReceiver({
-    audience_mode: "b2b",
     company_name: `SMOKE-TEST ${stamp}`,
-    contact_email: `smoke+${stamp}@pitchmachine.ai`,
-    custom_notes: "Delete me — created by @pitchmachine/mcp scripts/smoke.mjs",
+    company_domain: "pitchmachine.ai",
+    person_name: "Smoke Test",
+    person_email: `smoke+${stamp}@pitchmachine.ai`,
+    notes: "Delete me — created by @pitchmachine/mcp scripts/smoke.mjs",
+    audience_mode: "b2b",
   });
   const ms = Date.now() - t0;
   console.error(

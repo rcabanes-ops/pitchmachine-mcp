@@ -30,7 +30,7 @@ Four tools:
 
 | Tool | What it does |
 |---|---|
-| `pitchmachine_create_receiver` | Adds a prospect (B2B) or an individual (B2C). |
+| `pitchmachine_create_receiver` | Adds a receiver (a company + one contact human). Same shape as the production form; `company_name` is the only required field. Set `audience_mode: "b2c"` and fill the B2C-only strings for personal-book receivers. |
 | `pitchmachine_generate_pitch` | Kicks off generation and polls until the microsite is deployed. |
 | `pitchmachine_get_pitch_url` | Fetches the public share URL for any pitch, past or in-progress. |
 | `pitchmachine_list_pitches` | Lists recent pitches with status and URL. |
@@ -129,8 +129,8 @@ your cookie is good and the endpoint path is right. If it prints
 
 The agent calls, in order:
 
-1. `pitchmachine_create_receiver` with the prospect's company, contact email,
-   and any notes.
+1. `pitchmachine_create_receiver` with `company_name`, `person_name`, `person_email`,
+   and any `notes`.
 2. `pitchmachine_generate_pitch` with the returned `receiver_id`.
 3. When the tool returns `status: "deployed"` and `public_url`, the agent
    drops the link into your Slack / email draft / task tracker of choice.

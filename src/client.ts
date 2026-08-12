@@ -92,31 +92,43 @@ export class PitchMachineClient {
   // ---------------------------------------------------------------------------
 
   async createReceiver(input: CreateReceiverInput): Promise<ReceiverApiResponse> {
-    // We deliberately forward the exact camelCase field names Pitch Machine's
-    // /api/receivers endpoint expects. The MCP-facing snake_case is
-    // translated here — one place, one map — so if the API renames a field
-    // the fix is local.
+    // Translate MCP-facing snake_case to the server's canonical camelCase in
+    // exactly one place. The server's createReceiverSchema is `.strict()`,
+    // so we drop keys the caller didn't provide instead of forwarding
+    // `undefined` (which JSON.stringify would elide anyway, but being
+    // explicit makes the wire shape auditable in tests).
     //
-    // Note the path: the server exposes `/api/receivers`, not `/api/v2/…`.
-    // The pitches endpoints are v2, the receivers endpoint is not.
+    // Field-name source of truth: shared/schema.ts → `receiverFields`.
+    // The web form at src/src/client/src/lib/receivers.ts posts the same
+    // shape.
+    //
+    // Path note: the server exposes `/api/receivers` (not `/api/v2/…`).
+    // Only the pitches endpoints are v2.
     const body: Record<string, unknown> = {
-      audienceMode: input.audience_mode,
+      companyName: input.company_name,
     };
-
-    if (input.audience_mode === "b2b") {
-      body.companyName = input.company_name;
-      body.companyUrl = input.company_url;
-      body.contactFirstName = input.contact_first_name;
-      body.contactLastName = input.contact_last_name;
-      body.contactTitle = input.contact_title;
-      body.contactEmail = input.contact_email;
-    } else {
-      body.receiverFirstName = input.receiver_first_name;
-      body.receiverLastName = input.receiver_last_name;
-      body.receiverEmail = input.receiver_email;
-      body.receiverNotes = input.receiver_notes;
-    }
-    if (input.custom_notes) body.customNotes = input.custom_notes;
+    const set = (key: string, value: unknown): void => {
+      if (value !== undefined) body[key] = value;
+    };
+    set("companyDomain", input.company_domain);
+    set("companyIndustry", input.company_industry);
+    set("companySize", input.company_size);
+    set("companyLocation", input.company_location);
+    set("personName", input.person_name);
+    set("personTitle", input.person_title);
+    set("personEmail", input.person_email);
+    set("personLinkedin", input.person_linkedin);
+    set("notes", input.notes);
+    set("brandModeOverride", input.brand_mode_override);
+    set("layoutIntentOverride", input.layout_intent_override);
+    set("kineticEnabled", input.kinetic_enabled);
+    set("kineticInAbout", input.kinetic_in_about);
+    set("kineticAsSplash", input.kinetic_as_splash);
+    set("audienceMode", input.audience_mode);
+    set("lifeStage", input.life_stage);
+    set("relationshipType", input.relationship_type);
+    set("knownContext", input.known_context);
+    set("linkedinPaste", input.linkedin_paste);
 
     const raw = await this.request("/api/receivers", {
       method: "POST",

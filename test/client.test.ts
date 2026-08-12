@@ -41,7 +41,11 @@ function makeFakeFetch(response: {
 
 describe("PitchMachineClient", () => {
   describe("createReceiver", () => {
-    it("POSTs to /api/receivers (not /api/v2/receivers) with camelCase B2B payload", async () => {
+    // Ground truth for these tests is `shared/schema.ts` → `receiverFields`
+    // and `createReceiverSchema` on the marketing repo. That schema is
+    // `.strict()` so any typo here would 400 in production; every field
+    // asserted below is a real column the server accepts.
+    it("POSTs to /api/receivers (not /api/v2/…) with canonical camelCase fields", async () => {
       // The receivers endpoint is deliberately un-versioned — see
       // server/routes.ts:968. Regressing to /api/v2/receivers 404s every
       // first tool call.
@@ -57,25 +61,55 @@ describe("PitchMachineClient", () => {
       });
 
       const result = await client.createReceiver({
-        audience_mode: "b2b",
         company_name: "Acme",
-        contact_email: "person@acme.com",
-        custom_notes: "warm lead",
+        company_domain: "acme.com",
+        person_name: "Ada Lovelace",
+        person_title: "CTO",
+        person_email: "ada@acme.com",
+        notes: "warm lead",
+        audience_mode: "b2b",
       });
 
       expect(result.id).toBe("rcv_123");
       expect(calls).toHaveLength(1);
       expect(calls[0]?.url).toBe("https://api.example.com/api/receivers");
       const parsed = JSON.parse(String(calls[0]?.init.body ?? "{}"));
-      expect(parsed).toMatchObject({
-        audienceMode: "b2b",
+      expect(parsed).toEqual({
         companyName: "Acme",
-        contactEmail: "person@acme.com",
-        customNotes: "warm lead",
+        companyDomain: "acme.com",
+        personName: "Ada Lovelace",
+        personTitle: "CTO",
+        personEmail: "ada@acme.com",
+        notes: "warm lead",
+        audienceMode: "b2b",
       });
     });
 
-    it("sends B2C fields when audience_mode is b2c", async () => {
+    it("only sends companyName when nothing else is supplied", async () => {
+      // The server's strict schema will happily accept `{ companyName }` and
+      // default every other field. This guards against a future refactor
+      // that starts padding the wire body with empty strings the server
+      // doesn't want.
+      const { fetch: fakeFetch, calls } = makeFakeFetch({
+        status: 201,
+        body: { id: "rcv_bare", createdAt: "2026-08-11T12:00:00Z" },
+      });
+      const client = new PitchMachineClient({
+        baseUrl: "https://api.example.com",
+        token: "c",
+        authMode: "session-cookie",
+        fetchImpl: fakeFetch,
+      });
+
+      await client.createReceiver({ company_name: "Solo Inc" });
+
+      const parsed = JSON.parse(String(calls[0]?.init.body ?? "{}"));
+      expect(parsed).toEqual({ companyName: "Solo Inc" });
+    });
+
+    it("forwards B2C-specific fields and audienceMode when set", async () => {
+      // B2C intake is not a separate payload — it's the same shape with
+      // audience_mode: 'b2c' and the four B2C-only strings filled in.
       const { fetch: fakeFetch, calls } = makeFakeFetch({
         status: 201,
         body: { id: "rcv_c", audienceMode: "b2c", createdAt: "2026-08-11T12:00:00Z" },
@@ -88,20 +122,62 @@ describe("PitchMachineClient", () => {
       });
 
       await client.createReceiver({
+        company_name: "Personal Book",
+        person_name: "Ada Lovelace",
+        person_email: "ada@example.com",
         audience_mode: "b2c",
-        receiver_first_name: "Ada",
-        receiver_email: "ada@example.com",
+        life_stage: "job search",
+        relationship_type: "former colleague",
+        known_context: "met at OSCON 2019",
+        linkedin_paste: "Ada Lovelace — Head of Platform …",
       });
 
       const parsed = JSON.parse(String(calls[0]?.init.body ?? "{}"));
-      expect(parsed).toMatchObject({
+      expect(parsed).toEqual({
+        companyName: "Personal Book",
+        personName: "Ada Lovelace",
+        personEmail: "ada@example.com",
         audienceMode: "b2c",
-        receiverFirstName: "Ada",
-        receiverEmail: "ada@example.com",
+        lifeStage: "job search",
+        relationshipType: "former colleague",
+        knownContext: "met at OSCON 2019",
+        linkedinPaste: "Ada Lovelace — Head of Platform …",
       });
-      // B2B fields should not leak into a B2C payload.
-      expect(parsed).not.toHaveProperty("companyName");
+      // The fabricated B2B/B2C split from v0.1.0 must never come back.
       expect(parsed).not.toHaveProperty("contactEmail");
+      expect(parsed).not.toHaveProperty("contactFirstName");
+      expect(parsed).not.toHaveProperty("receiverEmail");
+      expect(parsed).not.toHaveProperty("receiverFirstName");
+      expect(parsed).not.toHaveProperty("companyUrl");
+      expect(parsed).not.toHaveProperty("customNotes");
+    });
+
+    it("forwards nullable overrides as explicit null (not omitted)", async () => {
+      // The server treats `key: null` and `key: absent` differently on
+      // update; on create it's mostly cosmetic but we still preserve the
+      // caller's intent.
+      const { fetch: fakeFetch, calls } = makeFakeFetch({
+        status: 201,
+        body: { id: "rcv_x", createdAt: "2026-08-11T12:00:00Z" },
+      });
+      const client = new PitchMachineClient({
+        baseUrl: "https://api.example.com",
+        token: "c",
+        authMode: "session-cookie",
+        fetchImpl: fakeFetch,
+      });
+
+      await client.createReceiver({
+        company_name: "Acme",
+        brand_mode_override: null,
+        layout_intent_override: null,
+        audience_mode: null,
+      });
+
+      const parsed = JSON.parse(String(calls[0]?.init.body ?? "{}"));
+      expect(parsed.brandModeOverride).toBeNull();
+      expect(parsed.layoutIntentOverride).toBeNull();
+      expect(parsed.audienceMode).toBeNull();
     });
   });
 
