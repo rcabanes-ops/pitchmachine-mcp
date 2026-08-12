@@ -1,6 +1,28 @@
 # Changelog
 
-## 0.2.1 — 2026-08-12
+## 0.2.2 — 2026-08-12
+
+Package rename to `@pitchmachine/mcp-server`. The original name
+`@pitchmachine/mcp` was placed under npm's 24-hour name-reserve hold after the
+`0.2.0` package was accidentally fully-unpublished (see 0.2.1 note below), and
+an immediate republish under the same name returned 404 on PUT. Rather than
+wait out the hold, the package moved to `@pitchmachine/mcp-server`, which also
+matches the `-server` suffix convention used throughout the MCP ecosystem
+(`@modelcontextprotocol/server-*`, etc.).
+
+Install command:
+
+```
+npm install -g @pitchmachine/mcp-server
+```
+
+Both `pitchmachine-mcp` and `pitchmachine-mcp-server` binaries are exposed, so
+existing Claude Desktop / Cursor config snippets from earlier docs continue to
+work.
+
+Code is byte-identical to what would have shipped as `0.2.1` / `0.2.0`.
+
+## 0.2.1 — 2026-08-12 (never reached npm)
 
 Housekeeping-only re-release. Code is byte-identical to what was intended for
 `0.2.0`. The `0.2.0` version was unpublished from the npm registry within its

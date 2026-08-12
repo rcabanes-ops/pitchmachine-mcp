@@ -1,10 +1,11 @@
 ﻿{
-  "name": "@pitchmachine/mcp",
-  "version": "0.2.1",
+  "name": "@pitchmachine/mcp-server",
+  "version": "0.2.2",
   "description": "Model Context Protocol server for Pitch Machine — build hyper-personalized pitch microsites from any AI agent (Claude Desktop, Cursor, Grok Bot, ChatGPT desktop).",
   "type": "module",
   "bin": {
-    "pitchmachine-mcp": "dist/index.js"
+    "pitchmachine-mcp": "dist/index.js",
+    "pitchmachine-mcp-server": "dist/index.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

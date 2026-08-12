@@ -3,7 +3,7 @@
 //
 // Registers four tools and speaks the Model Context Protocol over stdio.
 // Meant to be launched by an MCP host (Claude Desktop, Cursor, Grok Bot,
-// Continue, etc.) via `npx -y @pitchmachine/mcp`.
+// Continue, etc.) via `npx -y @pitchmachine/mcp-server`.
 //
 // If you're reading this because something broke: the server logs errors
 // to stderr — stdout is reserved for the MCP protocol frames and must
