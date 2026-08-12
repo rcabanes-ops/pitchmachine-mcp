@@ -11,3 +11,9 @@ coverage/
 
 # PR body scratch files
 .pr-body.md
+
+# scratch bodies for git/PR messaging (do not commit)
+.commit-body-*.md
+.pr-body-*.md
+.pr-comment-*.md
+.merge-body-*.md
