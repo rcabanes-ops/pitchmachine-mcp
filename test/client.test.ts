@@ -220,11 +220,12 @@ describe("PitchMachineClient", () => {
     });
 
     it("bearer mode sends Authorization: Bearer and no Cookie", async () => {
-      // v0.2.0 will flip the default to this once /api/agent/token ships.
+      // v0.2.0 default path. Server accepts pm_agent_live_* tokens on
+      // every route that reads a pitcher session.
       const { fetch: fakeFetch, calls } = makeFakeFetch({ status: 200, body: [] });
       const client = new PitchMachineClient({
         baseUrl: "https://api.example.com",
-        token: "pma_deadbeef",
+        token: "pm_agent_live_abcdefghijkmnpqrstuvwxyz",
         authMode: "bearer",
         fetchImpl: fakeFetch,
       });
@@ -232,7 +233,9 @@ describe("PitchMachineClient", () => {
       await client.listPitches();
 
       const headers = calls[0]?.init.headers as Record<string, string>;
-      expect(headers.Authorization).toBe("Bearer pma_deadbeef");
+      expect(headers.Authorization).toBe(
+        "Bearer pm_agent_live_abcdefghijkmnpqrstuvwxyz",
+      );
       expect(headers.Cookie).toBeUndefined();
     });
   });
