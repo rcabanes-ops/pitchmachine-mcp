@@ -19,7 +19,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { PitchMachineApiError, PitchMachineClient } from "./client.js";
+import { PitchMachineApiError, PitchMachineClient, type AuthMode } from "./client.js";
 import {
   CREATE_RECEIVER_TOOL_NAME,
   createReceiverToolDefinition,
@@ -42,26 +42,57 @@ import {
 } from "./tools/list-pitches.js";
 
 const SERVER_NAME = "pitchmachine";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.1.1";
 
 function logStderr(msg: string): void {
   // eslint-disable-next-line no-console
   console.error(`[pitchmachine-mcp] ${msg}`);
 }
 
-function readConfigFromEnv(): { baseUrl: string; token: string; timeoutMs?: number } {
-  const baseUrl = process.env.PITCHMACHINE_API_BASE?.trim() || "https://pitchmachine.ai";
-  const token = process.env.PITCHMACHINE_API_TOKEN?.trim();
-  if (!token) {
-    logStderr(
-      "PITCHMACHINE_API_TOKEN is not set. Add it to your MCP host's env config. " +
-        "See https://pitchmachine.ai/#/agents for setup instructions.",
-    );
-    process.exit(1);
+export interface ResolvedConfig {
+  baseUrl: string;
+  token: string;
+  authMode: AuthMode;
+  requestTimeoutMs?: number;
+}
+
+/**
+ * Resolve config from env vars.
+ *
+ * Precedence:
+ *   1. `PITCHMACHINE_API_TOKEN` present → Bearer mode (v0.2.0+).
+ *   2. `PITCHMACHINE_SESSION_COOKIE` present → session-cookie mode (v0.1.x).
+ *   3. Neither → fail loud on stderr and exit 1.
+ *
+ * Exported for tests. Never exits when `throwInsteadOfExit` is true.
+ */
+export function readConfigFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: { throwInsteadOfExit?: boolean } = {},
+): ResolvedConfig {
+  const baseUrl = env.PITCHMACHINE_API_BASE?.trim() || "https://pitchmachine.ai";
+  const bearerToken = env.PITCHMACHINE_API_TOKEN?.trim();
+  const sessionCookie = env.PITCHMACHINE_SESSION_COOKIE?.trim();
+
+  const timeoutRaw = env.PITCHMACHINE_REQUEST_TIMEOUT_MS?.trim();
+  const requestTimeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : undefined;
+
+  if (bearerToken) {
+    return { baseUrl, token: bearerToken, authMode: "bearer", requestTimeoutMs };
   }
-  const timeoutRaw = process.env.PITCHMACHINE_REQUEST_TIMEOUT_MS?.trim();
-  const timeoutMs = timeoutRaw ? Number.parseInt(timeoutRaw, 10) : undefined;
-  return { baseUrl, token, requestTimeoutMs: timeoutMs } as { baseUrl: string; token: string; timeoutMs?: number };
+  if (sessionCookie) {
+    return { baseUrl, token: sessionCookie, authMode: "session-cookie", requestTimeoutMs };
+  }
+
+  const msg =
+    "Neither PITCHMACHINE_API_TOKEN nor PITCHMACHINE_SESSION_COOKIE is set. " +
+    "For the current beta, sign in at https://pitchmachine.ai, open DevTools → " +
+    "Application → Cookies → copy the value of `pm_pitcher_sess`, and set it as " +
+    "PITCHMACHINE_SESSION_COOKIE in your MCP host's env config. " +
+    "See https://pitchmachine.ai/#/install for the full walkthrough.";
+  if (opts.throwInsteadOfExit) throw new Error(msg);
+  logStderr(msg);
+  process.exit(1);
 }
 
 export async function main(): Promise<void> {
@@ -69,7 +100,8 @@ export async function main(): Promise<void> {
   const client = new PitchMachineClient({
     baseUrl: cfg.baseUrl,
     token: cfg.token,
-    requestTimeoutMs: cfg.timeoutMs,
+    authMode: cfg.authMode,
+    requestTimeoutMs: cfg.requestTimeoutMs,
   });
 
   const server = new Server(
@@ -113,7 +145,9 @@ export async function main(): Promise<void> {
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  logStderr(`ready (server=${SERVER_NAME}@${SERVER_VERSION}, base=${cfg.baseUrl})`);
+  logStderr(
+    `ready (server=${SERVER_NAME}@${SERVER_VERSION}, base=${cfg.baseUrl}, auth=${cfg.authMode})`,
+  );
 }
 
 async function dispatch(name: string, args: unknown, client: PitchMachineClient): Promise<unknown> {

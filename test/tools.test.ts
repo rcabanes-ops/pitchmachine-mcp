@@ -36,9 +36,9 @@ describe("pitchmachine_create_receiver", () => {
 
     const result = await handleCreateReceiver(
       {
-        audience_mode: "b2b",
         company_name: "Acme",
-        contact_email: "person@acme.com",
+        person_email: "person@acme.com",
+        audience_mode: "b2b",
       },
       client,
     );
@@ -50,18 +50,28 @@ describe("pitchmachine_create_receiver", () => {
     });
   });
 
-  it("rejects b2b without company_name via cross-field validation", async () => {
+  it("requires company_name", async () => {
+    // The server's createReceiverSchema is `.strict()` with companyName as
+    // the only min(1) field. If an agent forgets it, we surface the error
+    // client-side before hitting the wire.
     const client = makeStubClient();
     await expect(
-      handleCreateReceiver({ audience_mode: "b2b", contact_email: "p@a.com" }, client),
-    ).rejects.toThrow(/company_name is required/);
+      handleCreateReceiver({ person_email: "p@a.com" }, client),
+    ).rejects.toThrow();
   });
 
-  it("rejects b2c without receiver_email", async () => {
+  it("rejects unknown field names so the fabricated v0.1.0 shape can't sneak back", async () => {
+    // If any of these ever pass Zod again, the client is once more shipping
+    // fields the server doesn't have.
     const client = makeStubClient();
-    await expect(
-      handleCreateReceiver({ audience_mode: "b2c", receiver_first_name: "Ada" }, client),
-    ).rejects.toThrow(/receiver_email is required/);
+    for (const fabricated of [
+      { company_name: "X", contact_email: "c@x.co" },
+      { company_name: "X", receiver_email: "r@x.co" },
+      { company_name: "X", company_url: "https://x.co" },
+      { company_name: "X", custom_notes: "hi" },
+    ]) {
+      await expect(handleCreateReceiver(fabricated, client)).rejects.toThrow();
+    }
   });
 
   it("substitutes now() when server response omits createdAt", async () => {
@@ -69,11 +79,29 @@ describe("pitchmachine_create_receiver", () => {
       createReceiver: vi.fn().mockResolvedValue({ id: "rcv_x", audienceMode: "b2c" }),
     } as never);
     const result = await handleCreateReceiver(
-      { audience_mode: "b2c", receiver_email: "a@b.co" },
+      {
+        company_name: "Personal Book",
+        person_email: "a@b.co",
+        audience_mode: "b2c",
+      },
       client,
     );
     expect(result.created_at).toBeTruthy();
     expect(() => new Date(result.created_at)).not.toThrow();
+  });
+
+  it("preserves null audience_mode from the server response", async () => {
+    // Server may stamp audienceMode: null ("inherit pitcher default"). The
+    // output shape must forward that faithfully instead of coercing to b2b.
+    const client = makeStubClient({
+      createReceiver: vi.fn().mockResolvedValue({
+        id: "rcv_n",
+        audienceMode: null,
+        createdAt: "2026-08-11T12:00:00Z",
+      }),
+    } as never);
+    const result = await handleCreateReceiver({ company_name: "Inherit Co" }, client);
+    expect(result.audience_mode).toBeNull();
   });
 });
 

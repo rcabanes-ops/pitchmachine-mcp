@@ -8,3 +8,6 @@ npm-debug.log*
 coverage/
 .vitest-cache/
 *.tsbuildinfo
+
+# PR body scratch files
+.pr-body.md
