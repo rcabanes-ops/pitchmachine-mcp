@@ -1,0 +1,63 @@
+{
+  "name": "@pitchmachine/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for Pitch Machine — build hyper-personalized pitch microsites from any AI agent (Claude Desktop, Cursor, Grok Bot, ChatGPT desktop).",
+  "type": "module",
+  "bin": {
+    "pitchmachine-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build && npm test",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "inspector": "npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "pitchmachine",
+    "ai-agent",
+    "claude-desktop",
+    "cursor",
+    "grok-bot",
+    "sales",
+    "outreach",
+    "b2b"
+  ],
+  "author": "Pitch Machine",
+  "license": "MIT",
+  "homepage": "https://pitchmachine.ai/#/agents",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rcabanes-ops/pitchmachine-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rcabanes-ops/pitchmachine-mcp/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
