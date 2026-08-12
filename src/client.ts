@@ -1,16 +1,17 @@
 // Thin, boring HTTP client around Pitch Machine's API.
 //
 // Everything the tools do goes through here. That means:
-//   - one place to swap in the real Bearer/API-token scheme once
-//     Pitch Machine ships /api/agent/token (v0.2.0)
+//   - one place to hold the Bearer/API-token scheme (v0.2.0+, default)
+//     and the legacy cookie-forwarding compatibility path (v0.1.x)
 //   - one place to standardize on error shapes
 //   - one place to mock in tests (see test/client.test.ts)
 //
-// Auth today (v0.1.1): the client forwards a copied HttpOnly session cookie
-// (`pm_pitcher_sess`) — the same cookie the browser holds after sign-in.
-// This is honest but ugly: users copy the cookie value from DevTools. Once
-// v0.2.0 lands a proper agent-token surface, `authHeaders()` gains a second
-// branch and everything else stays the same.
+// Auth (v0.2.0): the client prefers `Authorization: Bearer <token>` using a
+// long-lived agent token minted in the app at Settings → Agent access
+// (format: `pm_agent_live_<24 base62>`). If no token is provided but a
+// session cookie is, the client falls back to forwarding the browser's
+// `pm_pitcher_sess` value. The precedence lives in `readConfigFromEnv`; the
+// client just honours whatever `authMode` it's constructed with.
 //
 // Deliberately no retries. The generate-pitch tool has its own polling loop
 // with a caller-controlled timeout; other tools are single-shot and the
@@ -27,10 +28,13 @@ import {
 /**
  * Auth modes supported by the client.
  *
- * - `session-cookie`: forward the browser's `pm_pitcher_sess` cookie value.
- *   The one that works against the current server. Ugly to acquire.
- * - `bearer`: forward `Authorization: Bearer <token>`. Reserved for v0.2.0
- *   when `/api/agent/token` ships. Currently unused in production.
+ * - `bearer` (v0.2.0+, recommended): forward `Authorization: Bearer <token>`
+ *   using a long-lived agent token minted at Settings → Agent access.
+ *   Token format: `pm_agent_live_<24 base62>`. The server accepts this on
+ *   every route that reads a pitcher session.
+ * - `session-cookie` (v0.1.x compatibility): forward the browser's
+ *   `pm_pitcher_sess` cookie value. Still supported for one-off checks and
+ *   pre-token accounts; expires every 14 days.
  */
 export type AuthMode = "session-cookie" | "bearer";
 
@@ -38,9 +42,10 @@ export interface ClientConfig {
   baseUrl: string;
   /**
    * The credential value. Semantics depend on `authMode`:
+   *  - `bearer` → the agent token minted at Settings → Agent access
+   *    (`pm_agent_live_...`).
    *  - `session-cookie` → the cookie *value* (everything after `pm_pitcher_sess=`),
    *    URL-decoded if the browser encoded it.
-   *  - `bearer` → the API token as issued by `/api/agent/token`.
    */
   token: string;
   authMode: AuthMode;
@@ -200,8 +205,8 @@ export class PitchMachineClient {
   /**
    * Compose the auth header for a request.
    *
-   * Kept as its own method so v0.2.0's Bearer-token path lands as a one-line
-   * change (the `case "bearer"` branch is already here and unreachable today).
+   * Both branches are live in v0.2.0. `bearer` is the recommended path;
+   * `session-cookie` remains for backward compatibility with v0.1.x installs.
    */
   private authHeaders(): Record<string, string> {
     switch (this.authMode) {

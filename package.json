@@ -1,6 +1,6 @@
 {
   "name": "@pitchmachine/mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Model Context Protocol server for Pitch Machine — build hyper-personalized pitch microsites from any AI agent (Claude Desktop, Cursor, Grok Bot, ChatGPT desktop).",
   "type": "module",
   "bin": {

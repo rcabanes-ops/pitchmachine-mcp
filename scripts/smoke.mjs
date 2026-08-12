@@ -6,6 +6,9 @@
 // fetch. Run before publishing every release.
 //
 // Usage (from any dir):
+//   # v0.2.0 recommended path:
+//   export PITCHMACHINE_API_TOKEN="pm_agent_live_xxxxxxxxxxxxxxxxxxxxxxxx"
+//   # v0.1.x compatibility path (still works):
 //   export PITCHMACHINE_SESSION_COOKIE="v2.abc.def.ghi.hmac"
 //   export PITCHMACHINE_API_BASE="http://localhost:5000"   # optional
 //   node scripts/smoke.mjs
@@ -38,8 +41,8 @@ function die(msg) {
 
 if (!COOKIE && !TOKEN) {
   die(
-    "Set PITCHMACHINE_SESSION_COOKIE (v0.1.x) or PITCHMACHINE_API_TOKEN (v0.2.0+) " +
-      "before running. See README §Install.",
+    "Set PITCHMACHINE_API_TOKEN (v0.2.0+, recommended) or PITCHMACHINE_SESSION_COOKIE " +
+      "(v0.1.x compatibility) before running. See README §Install.",
   );
 }
 
@@ -72,11 +75,16 @@ async function rawCheck() {
   console.error(`[smoke] raw GET /api/v2/pitches?limit=1 → ${res.status} in ${ms}ms`);
   if (!res.ok) {
     console.error(`[smoke] response body (first 400 chars): ${text.slice(0, 400)}`);
-    die(
-      res.status === 401
-        ? "401 unauthorized. Cookie is likely stale — re-sign-in, re-copy pm_pitcher_sess."
-        : `raw check failed with status ${res.status}`,
-    );
+    if (res.status === 401) {
+      die(
+        authMode === "bearer"
+          ? "401 unauthorized. Token was revoked, expired, or never existed. " +
+              "Mint a new one at Settings → Agent access."
+          : "401 unauthorized. Cookie is likely stale — re-sign-in and re-copy " +
+              "pm_pitcher_sess.",
+      );
+    }
+    die(`raw check failed with status ${res.status}`);
   }
 
   // Parse just enough to confirm shape.

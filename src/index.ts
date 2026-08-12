@@ -42,7 +42,7 @@ import {
 } from "./tools/list-pitches.js";
 
 const SERVER_NAME = "pitchmachine";
-const SERVER_VERSION = "0.1.1";
+const SERVER_VERSION = "0.2.0";
 
 function logStderr(msg: string): void {
   // eslint-disable-next-line no-console
@@ -60,8 +60,11 @@ export interface ResolvedConfig {
  * Resolve config from env vars.
  *
  * Precedence:
- *   1. `PITCHMACHINE_API_TOKEN` present → Bearer mode (v0.2.0+).
- *   2. `PITCHMACHINE_SESSION_COOKIE` present → session-cookie mode (v0.1.x).
+ *   1. `PITCHMACHINE_API_TOKEN` present → Bearer mode (v0.2.0+, recommended).
+ *      Token format: `pm_agent_live_<24 base62>` — minted in the app at
+ *      Settings → Agent access.
+ *   2. `PITCHMACHINE_SESSION_COOKIE` present → session-cookie mode (v0.1.x
+ *      compatibility path; ok for one-off checks and pre-token accounts).
  *   3. Neither → fail loud on stderr and exit 1.
  *
  * Exported for tests. Never exits when `throwInsteadOfExit` is true.
@@ -86,9 +89,11 @@ export function readConfigFromEnv(
 
   const msg =
     "Neither PITCHMACHINE_API_TOKEN nor PITCHMACHINE_SESSION_COOKIE is set. " +
-    "For the current beta, sign in at https://pitchmachine.ai, open DevTools → " +
-    "Application → Cookies → copy the value of `pm_pitcher_sess`, and set it as " +
-    "PITCHMACHINE_SESSION_COOKIE in your MCP host's env config. " +
+    "Recommended: sign in at https://pitchmachine.ai, go to Settings → " +
+    "Agent access, mint a token (format: pm_agent_live_...), and set it as " +
+    "PITCHMACHINE_API_TOKEN in your MCP host's env config. " +
+    "Compatibility fallback: copy the pm_pitcher_sess cookie value from " +
+    "DevTools and set it as PITCHMACHINE_SESSION_COOKIE. " +
     "See https://pitchmachine.ai/#/install for the full walkthrough.";
   if (opts.throwInsteadOfExit) throw new Error(msg);
   logStderr(msg);
