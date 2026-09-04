@@ -120,7 +120,8 @@ describe("pitchmachine_generate_pitch", () => {
     fakeClock._now = 0;
   });
 
-  it("creates, prepays, polls, returns deployed URL", async () => {
+  it("creates, generates, deploys, polls, returns deployed URL", async () => {
+    // P0-2 fix: flow is now create → triggerGenerate → deployPitch → poll.
     const getPitch = vi
       .fn()
       .mockResolvedValueOnce({ id: "p_1", status: "generating" })
@@ -133,8 +134,9 @@ describe("pitchmachine_generate_pitch", () => {
         generatedAt: "2026-08-11T12:05:00Z",
       });
     const client = makeStubClient({
-      createPitch: vi.fn().mockResolvedValue({ id: "p_1", status: "generating" }),
-      prepayPitch: vi.fn().mockResolvedValue(undefined),
+      createPitch: vi.fn().mockResolvedValue({ id: "p_1", status: "draft" }),
+      triggerGenerate: vi.fn().mockResolvedValue(undefined),
+      deployPitch: vi.fn().mockResolvedValue({ id: "p_1", status: "deployed" }),
       getPitch,
     } as never);
 
@@ -145,16 +147,13 @@ describe("pitchmachine_generate_pitch", () => {
     expect(result.error).toBeNull();
   });
 
-  it("returns insufficient_credits signal on 402 prepay", async () => {
+  it("returns insufficient_credits signal on 402 from triggerGenerate", async () => {
     const client = makeStubClient({
       createPitch: vi.fn().mockResolvedValue({ id: "p_2", status: "draft" }),
-      prepayPitch: vi.fn().mockRejectedValue(
-        new PitchMachineApiError("out of credits", {
-          status: 402,
-          url: "x",
-          body: null,
-        }),
+      triggerGenerate: vi.fn().mockRejectedValue(
+        new PitchMachineApiError("out of credits", { status: 402, url: "x", body: null }),
       ),
+      deployPitch: vi.fn(),
       getPitch: vi.fn(),
     } as never);
 
@@ -167,8 +166,9 @@ describe("pitchmachine_generate_pitch", () => {
 
   it("respects poll_timeout_seconds and returns in-progress state", async () => {
     const client = makeStubClient({
-      createPitch: vi.fn().mockResolvedValue({ id: "p_3", status: "generating" }),
-      prepayPitch: vi.fn().mockResolvedValue(undefined),
+      createPitch: vi.fn().mockResolvedValue({ id: "p_3", status: "draft" }),
+      triggerGenerate: vi.fn().mockResolvedValue(undefined),
+      deployPitch: vi.fn().mockResolvedValue({ id: "p_3", status: "deployed" }),
       // Always says generating — the loop must give up on its own.
       getPitch: vi.fn().mockResolvedValue({ id: "p_3", status: "generating" }),
     } as never);
@@ -184,8 +184,9 @@ describe("pitchmachine_generate_pitch", () => {
 
   it("surfaces terminal error status with API-provided message", async () => {
     const client = makeStubClient({
-      createPitch: vi.fn().mockResolvedValue({ id: "p_4", status: "generating" }),
-      prepayPitch: vi.fn().mockResolvedValue(undefined),
+      createPitch: vi.fn().mockResolvedValue({ id: "p_4", status: "draft" }),
+      triggerGenerate: vi.fn().mockResolvedValue(undefined),
+      deployPitch: vi.fn().mockResolvedValue({ id: "p_4", status: "deployed" }),
       getPitch: vi
         .fn()
         .mockResolvedValueOnce({ id: "p_4", status: "error", error: "brand fetch failed" }),

@@ -73,7 +73,9 @@ export function readConfigFromEnv(
   env: NodeJS.ProcessEnv = process.env,
   opts: { throwInsteadOfExit?: boolean } = {},
 ): ResolvedConfig {
-  const baseUrl = env.PITCHMACHINE_API_BASE?.trim() || "https://pitchmachine.ai";
+  // P0-2: use www.pitchmachine.ai — pitchmachine.ai 308-redirects to www,
+  // and Node's fetch strips Authorization on cross-origin redirects.
+  const baseUrl = env.PITCHMACHINE_API_BASE?.trim() || "https://www.pitchmachine.ai";
   const bearerToken = env.PITCHMACHINE_API_TOKEN?.trim();
   const sessionCookie = env.PITCHMACHINE_SESSION_COOKIE?.trim();
 
