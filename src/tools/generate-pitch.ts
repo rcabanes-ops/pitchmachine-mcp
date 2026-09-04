@@ -54,27 +54,48 @@ export async function handleGeneratePitch(
   const created = await client.createPitch(input.receiver_id);
   const pitchId = created.id;
 
-  // Step 2: prepay. If the pitcher is out of credits, the API returns 402
-  // and we surface an actionable message. We deliberately create the pitch
-  // *before* prepaying so the pitch_id is real and the agent can retry
-  // prepay-only later if the account gets topped up.
+  // Step 2: trigger the generation pipeline.
+  // P0-2 fix: the previous version prepaid then polled — it never called
+  // /generate (SSE stream) or /deploy, so the pitch stayed draft forever.
+  // Correct flow: trigger generate → wait for SSE stream to close → deploy
+  // (publish uses the free-publish or credit ledger via publishCharge) → poll.
   try {
-    await client.prepayPitch(pitchId);
+    await client.triggerGenerate(pitchId);
   } catch (err) {
-    if (err instanceof PitchMachineApiError && err.status === 402) {
+    if (err instanceof PitchMachineApiError && (err.status === 402 || err.status === 429)) {
+      const isCredits = err.status === 402;
       return {
         pitch_id: pitchId,
-        status: "insufficient_credits",
+        status: isCredits ? "insufficient_credits" : "rate_limited",
         public_url: null,
-        error:
-          "Insufficient credits. Purchase credits at https://pitchmachine.ai and then call pitchmachine_get_pitch_url to resume.",
+        error: isCredits
+          ? "Insufficient credits or daily draft cap reached. Visit https://www.pitchmachine.ai to manage your account."
+          : "Daily draft generation limit reached. Try again tomorrow or add credits to raise your cap.",
         generated_at: null,
       };
     }
     throw err;
   }
 
-  // Step 3: poll until done or timeout.
+  // Step 3: deploy (publish) the generated pitch.
+  // After the SSE stream closes the pitch is in 'preview'. Deploy mints the
+  // share link and uses a free publish (first 2) or debits 1 credit.
+  try {
+    await client.deployPitch(pitchId);
+  } catch (err) {
+    if (err instanceof PitchMachineApiError && err.status === 402) {
+      return {
+        pitch_id: pitchId,
+        status: "insufficient_credits",
+        public_url: null,
+        error: "Generated but could not publish — insufficient credits. Visit https://www.pitchmachine.ai to add credits, then call pitchmachine_get_pitch_url.",
+        generated_at: null,
+      };
+    }
+    throw err;
+  }
+
+  // Step 4: poll until deployed or timeout.
   const started = clock.now();
   let latest: PitchApiResponse = created;
   while (!TERMINAL_STATUSES.has(latest.status)) {

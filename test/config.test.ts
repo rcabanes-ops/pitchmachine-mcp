@@ -12,7 +12,7 @@ import { readConfigFromEnv } from "../src/index.js";
 describe("readConfigFromEnv", () => {
   it("defaults baseUrl to https://pitchmachine.ai when unset", () => {
     const cfg = readConfigFromEnv({ PITCHMACHINE_SESSION_COOKIE: "v2.abc" });
-    expect(cfg.baseUrl).toBe("https://pitchmachine.ai");
+    expect(cfg.baseUrl).toBe("https://www.pitchmachine.ai");
   });
 
   it("honours PITCHMACHINE_API_BASE for dev/staging pointing", () => {

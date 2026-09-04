@@ -164,6 +164,50 @@ export class PitchMachineClient {
     return PitchApiResponseSchema.parse(raw);
   }
 
+  /** P0-2: trigger the generation pipeline (POST /generate). Uses fetch directly
+   *  to consume the SSE stream; resolves when the stream closes (done or error). */
+  async triggerGenerate(pitchId: string): Promise<void> {
+    const url = `${this.baseUrl}/api/v2/pitches/${encodeURIComponent(pitchId)}/generate`;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (this.authMode === "bearer") {
+      headers["Authorization"] = `Bearer ${this.token}`;
+    } else {
+      headers["Cookie"] = this.token;
+    }
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: "{}",
+      signal: AbortSignal.timeout(this.requestTimeoutMs),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new PitchMachineApiError(`generate failed (${res.status})`, { status: res.status, url, body });
+    }
+    // Drain the SSE stream until the connection closes.
+    // We don't parse events here — we poll getPitch() after this resolves.
+    if (res.body) {
+      const reader = res.body.getReader();
+      try {
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    }
+  }
+
+  /** P0-2: publish (deploy) a generated pitch. */
+  async deployPitch(pitchId: string): Promise<PitchApiResponse> {
+    const raw = await this.request(`/api/v2/pitches/${encodeURIComponent(pitchId)}/deploy`, {
+      method: "POST",
+      body: "{}",
+    });
+    return PitchApiResponseSchema.parse(raw);
+  }
+
   async getPitch(pitchId: string): Promise<PitchApiResponse> {
     const raw = await this.request(`/api/v2/pitches/${encodeURIComponent(pitchId)}`, {
       method: "GET",
