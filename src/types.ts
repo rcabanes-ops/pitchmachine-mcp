@@ -133,7 +133,7 @@ export type CreateReceiverInput = z.infer<typeof CreateReceiverInputSchema>;
 // What the API returns. Tolerant — we accept anything with an id.
 export const ReceiverApiResponseSchema = z
   .object({
-    id: z.string(),
+    id: z.coerce.string(),
     audienceMode: z.string().nullable().optional(),
     createdAt: z.string().optional(),
   })
@@ -154,8 +154,8 @@ export interface CreateReceiverOutput {
 
 export const PitchApiResponseSchema = z
   .object({
-    id: z.string(),
-    receiverId: z.string().optional(),
+    id: z.coerce.string(),
+    receiverId: z.coerce.string().optional(),
     status: z.string(),
     slug: z.string().nullable().optional(),
     shareToken: z.string().nullable().optional(),

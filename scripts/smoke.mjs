@@ -30,7 +30,7 @@
 
 import { PitchMachineClient } from "../dist/client.js";
 
-const BASE = (process.env.PITCHMACHINE_API_BASE || "https://pitchmachine.ai").replace(/\/+$/, "");
+const BASE = (process.env.PITCHMACHINE_API_BASE || "https://www.pitchmachine.ai").replace(/\/+$/, "");
 const COOKIE = process.env.PITCHMACHINE_SESSION_COOKIE?.trim();
 const TOKEN = process.env.PITCHMACHINE_API_TOKEN?.trim();
 
