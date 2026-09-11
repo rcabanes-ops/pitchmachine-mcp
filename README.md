@@ -1,4 +1,4 @@
-# `@pitchmachine/mcp-server`
+# `pitchmachine-mcp-server`
 
 **Model Context Protocol server for [Pitch Machine](https://pitchmachine.ai).**
 Build hyper-personalized pitch microsites from any AI agent — Claude Desktop,
@@ -64,7 +64,7 @@ outbox.
 Treat the token like a password. It's tied to your pitcher, not a device;
 revoke and re-mint from Settings if it ever leaks.
 
-### 2. Point your MCP host at `@pitchmachine/mcp-server`
+### 2. Point your MCP host at `pitchmachine-mcp-server`
 
 #### Claude Desktop
 
@@ -76,7 +76,7 @@ or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
   "mcpServers": {
     "pitchmachine": {
       "command": "npx",
-      "args": ["-y", "@pitchmachine/mcp-server"],
+      "args": ["-y", "pitchmachine-mcp-server"],
       "env": {
         "PITCHMACHINE_API_TOKEN": "pm_agent_live_replace_with_your_token"
       }
@@ -99,7 +99,7 @@ this exact JSON block with the token already filled in.
   "mcpServers": {
     "pitchmachine": {
       "command": "npx",
-      "args": ["-y", "@pitchmachine/mcp-server"],
+      "args": ["-y", "pitchmachine-mcp-server"],
       "env": {
         "PITCHMACHINE_API_TOKEN": "pm_agent_live_replace_with_your_token"
       }
@@ -110,7 +110,7 @@ this exact JSON block with the token already filled in.
 
 #### Grok Bot / any other MCP host
 
-The stdio command is the same. Point your host at `npx -y @pitchmachine/mcp-server`
+The stdio command is the same. Point your host at `npx -y pitchmachine-mcp-server`
 with `PITCHMACHINE_API_TOKEN` in the environment.
 
 ### 3. Verify with the smoke script
@@ -151,7 +151,7 @@ token. The cookie is valid for 14 days; re-copy after that.
   "mcpServers": {
     "pitchmachine": {
       "command": "npx",
-      "args": ["-y", "@pitchmachine/mcp-server"],
+      "args": ["-y", "pitchmachine-mcp-server"],
       "env": {
         "PITCHMACHINE_SESSION_COOKIE": "v2.abcd1234...hmac_signature_here"
       }

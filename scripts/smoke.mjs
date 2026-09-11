@@ -152,7 +152,7 @@ async function receiverPathCheck() {
     company_domain: "pitchmachine.ai",
     person_name: "Smoke Test",
     person_email: `smoke+${stamp}@pitchmachine.ai`,
-    notes: "Delete me - created by @pitchmachine/mcp-server scripts/smoke.mjs",
+    notes: "Delete me - created by pitchmachine-mcp-server scripts/smoke.mjs",
     audience_mode: "b2b",
   });
   const ms = Date.now() - t0;
